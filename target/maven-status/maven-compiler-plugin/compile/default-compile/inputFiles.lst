@@ -1,7 +1,12 @@
 C:\Users\asus\Desktop\hci final project\src\main\java\com\smartlibrary\controller\LoginController.java
 C:\Users\asus\Desktop\hci final project\src\main\java\com\smartlibrary\controller\MainController.java
+C:\Users\asus\Desktop\hci final project\src\main\java\com\smartlibrary\dao\ActivityLogDao.java
 C:\Users\asus\Desktop\hci final project\src\main\java\com\smartlibrary\dao\BookDao.java
+C:\Users\asus\Desktop\hci final project\src\main\java\com\smartlibrary\dao\BorrowingDao.java
 C:\Users\asus\Desktop\hci final project\src\main\java\com\smartlibrary\dao\DatabaseManager.java
+C:\Users\asus\Desktop\hci final project\src\main\java\com\smartlibrary\dao\FineDao.java
+C:\Users\asus\Desktop\hci final project\src\main\java\com\smartlibrary\dao\NotificationDao.java
+C:\Users\asus\Desktop\hci final project\src\main\java\com\smartlibrary\dao\ReservationDao.java
 C:\Users\asus\Desktop\hci final project\src\main\java\com\smartlibrary\dao\UserDao.java
 C:\Users\asus\Desktop\hci final project\src\main\java\com\smartlibrary\MainApp.java
 C:\Users\asus\Desktop\hci final project\src\main\java\com\smartlibrary\model\ActivityLog.java

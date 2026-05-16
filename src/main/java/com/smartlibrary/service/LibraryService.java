@@ -1,7 +1,6 @@
 package com.smartlibrary.service;
 
-import com.smartlibrary.dao.BookDao;
-import com.smartlibrary.dao.DatabaseManager;
+import com.smartlibrary.dao.*;
 import com.smartlibrary.model.*;
 
 import java.io.IOException;
@@ -20,6 +19,10 @@ public class LibraryService {
     public static final BigDecimal DAILY_FINE = new BigDecimal("2.00");
 
     private final BookDao bookDao;
+    private final BorrowingDao borrowingDao;
+    private final ReservationDao reservationDao;
+    private final FineDao fineDao;
+    private final ActivityLogDao activityLogDao;
     private final List<Book> books = new ArrayList<>();
     private final List<Borrowing> borrowings = new ArrayList<>();
     private final List<Reservation> reservations = new ArrayList<>();
@@ -30,9 +33,14 @@ public class LibraryService {
     private int nextReservationId = 300;
     private int nextFineId = 400;
     private int nextLogId = 500;
+    private boolean databaseMode;
 
     public LibraryService(DatabaseManager databaseManager) {
         this.bookDao = new BookDao(databaseManager);
+        this.borrowingDao = new BorrowingDao(databaseManager);
+        this.reservationDao = new ReservationDao(databaseManager);
+        this.fineDao = new FineDao(databaseManager);
+        this.activityLogDao = new ActivityLogDao(databaseManager);
         seedBooks();
         seedWorkflow();
         try {
@@ -41,8 +49,18 @@ public class LibraryService {
                 books.clear();
                 books.addAll(databaseBooks);
             }
+            borrowings.clear();
+            borrowings.addAll(borrowingDao.findAll());
+            reservations.clear();
+            reservations.addAll(reservationDao.findAll());
+            fines.clear();
+            fines.addAll(fineDao.findAll());
+            logs.clear();
+            logs.addAll(activityLogDao.findAll());
+            databaseMode = true;
         } catch (SQLException ignored) {
             // Keeps presentation mode functional when MySQL is not running.
+            databaseMode = false;
         }
     }
 
@@ -77,6 +95,13 @@ public class LibraryService {
             throw new IllegalArgumentException("Duplicate ISBN detected. Each book record must have a unique ISBN.");
         }
         Book book = new Book(nextBookId++, title, author, isbn, category, year, quantity, quantity, shelf, "Available", coverPath);
+        if (databaseMode) {
+            try {
+                book = bookDao.save(book);
+            } catch (SQLException ex) {
+                throw new IllegalStateException("Database insert failed for books. Check MySQL category/book constraints.", ex);
+            }
+        }
         books.add(book);
         log(actor, "BOOK_CREATED", title + " was added to catalog.");
         return book;
@@ -88,12 +113,26 @@ public class LibraryService {
             throw new IllegalArgumentException("Available copies must stay between zero and total quantity.");
         }
         book.setStatus(book.getAvailableCopies() > 0 ? "Available" : "Unavailable");
+        if (databaseMode) {
+            try {
+                bookDao.update(book);
+            } catch (SQLException ex) {
+                throw new IllegalStateException("Database update failed for books.", ex);
+            }
+        }
         log(actor, "BOOK_UPDATED", book.getTitle() + " was updated.");
     }
 
     public void deleteBook(Book book, String actor) {
         boolean borrowed = borrowings.stream().anyMatch(item -> item.getBookId() == book.getId() && item.getReturnDate() == null);
         if (borrowed) throw new IllegalArgumentException("This book cannot be deleted while borrowed.");
+        if (databaseMode) {
+            try {
+                bookDao.deleteById(book.getId());
+            } catch (SQLException ex) {
+                throw new IllegalStateException("Database delete failed for books. Check related borrowings/reservations.", ex);
+            }
+        }
         books.remove(book);
         log(actor, "BOOK_DELETED", book.getTitle() + " was removed from catalog.");
     }
@@ -110,6 +149,14 @@ public class LibraryService {
         book.setStatus(book.getAvailableCopies() > 0 ? "Available" : "Unavailable");
         Borrowing borrowing = new Borrowing(nextBorrowingId++, book.getId(), member.getId(), book.getTitle(), member.getFullName(),
                 LocalDate.now(), LocalDate.now().plusDays(DEFAULT_BORROW_DAYS), null, "Borrowed");
+        if (databaseMode) {
+            try {
+                borrowing = borrowingDao.save(borrowing, null);
+                bookDao.updateAvailability(book);
+            } catch (SQLException ex) {
+                throw new IllegalStateException("Database insert failed for borrowing.", ex);
+            }
+        }
         borrowings.add(borrowing);
         log(actor, "BOOK_BORROWED", member.getFullName() + " borrowed " + book.getTitle() + ".");
         return borrowing;
@@ -122,16 +169,47 @@ public class LibraryService {
         books.stream().filter(book -> book.getId() == borrowing.getBookId()).findFirst().ifPresent(book -> {
             book.setAvailableCopies(Math.min(book.getQuantity(), book.getAvailableCopies() + 1));
             book.setStatus(book.getAvailableCopies() > 0 ? "Available" : "Unavailable");
+            if (databaseMode) {
+                try {
+                    bookDao.updateAvailability(book);
+                } catch (SQLException ex) {
+                    throw new IllegalStateException("Database update failed for book availability.", ex);
+                }
+            }
         });
         long overdueDays = ChronoUnit.DAYS.between(borrowing.getDueDate(), LocalDate.now());
         if (overdueDays > 0) {
-            fines.add(new Fine(nextFineId++, borrowing.getId(), borrowing.getMemberId(),
-                    DAILY_FINE.multiply(BigDecimal.valueOf(overdueDays)), "Late return: " + overdueDays + " day(s)", "Unpaid", LocalDate.now()));
+            Fine fine = new Fine(nextFineId++, borrowing.getId(), borrowing.getMemberId(),
+                    DAILY_FINE.multiply(BigDecimal.valueOf(overdueDays)), "Late return: " + overdueDays + " day(s)", "Unpaid", LocalDate.now());
+            if (databaseMode) {
+                try {
+                    fine = fineDao.save(fine);
+                } catch (SQLException ex) {
+                    throw new IllegalStateException("Database insert failed for fines.", ex);
+                }
+            }
+            fines.add(fine);
+        }
+        if (databaseMode) {
+            try {
+                borrowingDao.markReturned(borrowing);
+            } catch (SQLException ex) {
+                throw new IllegalStateException("Database update failed for returned borrowing.", ex);
+            }
         }
         reservations.stream()
                 .filter(reservation -> reservation.getBookId() == borrowing.getBookId() && reservation.getStatus().equals("Waiting"))
                 .findFirst()
-                .ifPresent(reservation -> reservation.setStatus("Available"));
+                .ifPresent(reservation -> {
+                    reservation.setStatus("Available");
+                    if (databaseMode) {
+                        try {
+                            reservationDao.updateStatus(reservation);
+                        } catch (SQLException ex) {
+                            throw new IllegalStateException("Database update failed for reservation status.", ex);
+                        }
+                    }
+                });
         log(actor, "BOOK_RETURNED", borrowing.getBookTitle() + " was returned by " + borrowing.getMemberName() + ".");
     }
 
@@ -139,6 +217,13 @@ public class LibraryService {
         boolean exists = reservations.stream().anyMatch(item -> item.getBookId() == book.getId() && item.getMemberId() == member.getId() && item.getStatus().equals("Waiting"));
         if (exists) throw new IllegalArgumentException("A reservation already exists for this member and book.");
         Reservation reservation = new Reservation(nextReservationId++, book.getId(), member.getId(), book.getTitle(), member.getFullName(), LocalDate.now(), "Waiting");
+        if (databaseMode) {
+            try {
+                reservation = reservationDao.save(reservation);
+            } catch (SQLException ex) {
+                throw new IllegalStateException("Database insert failed for reservations.", ex);
+            }
+        }
         reservations.add(reservation);
         log(actor, "BOOK_RESERVED", member.getFullName() + " reserved " + book.getTitle() + ".");
         return reservation;
@@ -199,7 +284,18 @@ public class LibraryService {
     }
 
     public void log(String actor, String action, String details) {
+        if (databaseMode) {
+            try {
+                activityLogDao.save(actor, action, details);
+            } catch (SQLException ignored) {
+                // Keep UI responsive even if log persistence fails.
+            }
+        }
         logs.add(0, new ActivityLog(nextLogId++, actor == null ? "System" : actor, action, details, java.time.LocalDateTime.now()));
+    }
+
+    public boolean isDatabaseMode() {
+        return databaseMode;
     }
 
     private void seedBooks() {

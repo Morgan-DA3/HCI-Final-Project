@@ -30,20 +30,30 @@ public class BookDao {
         return books;
     }
 
-    public void save(Book book) throws SQLException {
+    public Book save(Book book) throws SQLException {
+        ensureCategory(book.getCategory());
         String sql = """
                 INSERT INTO books(title, author, isbn, category_name, publication_year, quantity,
                                   available_copies, shelf_location, status, cover_image_path)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = databaseManager.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+             PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             bindBook(statement, book);
             statement.executeUpdate();
+            try (ResultSet keys = statement.getGeneratedKeys()) {
+                if (keys.next()) {
+                    return new Book(keys.getInt(1), book.getTitle(), book.getAuthor(), book.getIsbn(), book.getCategory(),
+                            book.getPublicationYear(), book.getQuantity(), book.getAvailableCopies(), book.getShelfLocation(),
+                            book.getStatus(), book.getCoverImagePath());
+                }
+            }
         }
+        throw new SQLException("Book was inserted, but no generated id was returned.");
     }
 
     public void update(Book book) throws SQLException {
+        ensureCategory(book.getCategory());
         String sql = """
                 UPDATE books SET title=?, author=?, isbn=?, category_name=?, publication_year=?,
                                  quantity=?, available_copies=?, shelf_location=?, status=?, cover_image_path=?
@@ -53,6 +63,35 @@ public class BookDao {
              PreparedStatement statement = connection.prepareStatement(sql)) {
             bindBook(statement, book);
             statement.setInt(11, book.getId());
+            statement.executeUpdate();
+        }
+    }
+
+    public void deleteById(int id) throws SQLException {
+        try (Connection connection = databaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement("DELETE FROM books WHERE id=?")) {
+            statement.setInt(1, id);
+            statement.executeUpdate();
+        }
+    }
+
+    public void updateAvailability(Book book) throws SQLException {
+        String sql = "UPDATE books SET available_copies=?, status=? WHERE id=?";
+        try (Connection connection = databaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, book.getAvailableCopies());
+            statement.setString(2, book.getStatus());
+            statement.setInt(3, book.getId());
+            statement.executeUpdate();
+        }
+    }
+
+    public void ensureCategory(String category) throws SQLException {
+        String sql = "INSERT INTO categories(name, description) VALUES (?, ?) ON DUPLICATE KEY UPDATE name=name";
+        try (Connection connection = databaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, category);
+            statement.setString(2, "Created from application catalog form");
             statement.executeUpdate();
         }
     }

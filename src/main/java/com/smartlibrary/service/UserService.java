@@ -16,6 +16,7 @@ public class UserService {
     private final UserDao userDao;
     private final List<User> users = new ArrayList<>();
     private int nextId = 10;
+    private boolean databaseMode;
 
     public UserService(DatabaseManager databaseManager) {
         this.userDao = new UserDao(databaseManager);
@@ -25,9 +26,11 @@ public class UserService {
             if (!databaseUsers.isEmpty()) {
                 users.clear();
                 users.addAll(databaseUsers);
+                databaseMode = true;
             }
         } catch (SQLException ignored) {
             // Demo mode remains available when MySQL has not been configured yet.
+            databaseMode = false;
         }
     }
 
@@ -53,13 +56,35 @@ public class UserService {
                 .filter(user -> user.getEmail().equalsIgnoreCase(email))
                 .findAny()
                 .ifPresent(user -> { throw new IllegalArgumentException("This email is already registered."); });
-        User user = new User(nextId++, name, email, PasswordUtil.hash(password), role, true, LocalDateTime.now());
+        String passwordHash = PasswordUtil.hash(password);
+        User user;
+        if (databaseMode) {
+            try {
+                user = userDao.save(name, email, passwordHash, role);
+            } catch (SQLException ex) {
+                throw new IllegalStateException("Database insert failed. Check MySQL connection and the users table constraints.", ex);
+            }
+        } else {
+            user = new User(nextId++, name, email, passwordHash, role, true, LocalDateTime.now());
+        }
         users.add(user);
         return user;
     }
 
+    public boolean isDatabaseMode() {
+        return databaseMode;
+    }
+
     public void toggleActive(User user) {
         user.setActive(!user.isActive());
+        if (databaseMode) {
+            try {
+                userDao.updateActive(user.getId(), user.isActive());
+            } catch (SQLException ex) {
+                user.setActive(!user.isActive());
+                throw new IllegalStateException("Database update failed for user status.", ex);
+            }
+        }
     }
 
     public long countActiveUsers() {

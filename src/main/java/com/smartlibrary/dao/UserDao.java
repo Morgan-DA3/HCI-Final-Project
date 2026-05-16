@@ -45,6 +45,36 @@ public class UserDao {
         return users;
     }
 
+    public User save(String fullName, String email, String passwordHash, Role role) throws SQLException {
+        String sql = """
+                INSERT INTO users(full_name, email, password_hash, role_name, active)
+                VALUES (?, ?, ?, ?, TRUE)
+                """;
+        try (Connection connection = databaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            statement.setString(1, fullName);
+            statement.setString(2, email);
+            statement.setString(3, passwordHash);
+            statement.setString(4, role.name());
+            statement.executeUpdate();
+            try (ResultSet keys = statement.getGeneratedKeys()) {
+                if (keys.next()) {
+                    return new User(keys.getInt(1), fullName, email, passwordHash, role, true, java.time.LocalDateTime.now());
+                }
+            }
+        }
+        throw new SQLException("User was inserted, but no generated id was returned.");
+    }
+
+    public void updateActive(int userId, boolean active) throws SQLException {
+        try (Connection connection = databaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement("UPDATE users SET active=? WHERE id=?")) {
+            statement.setBoolean(1, active);
+            statement.setInt(2, userId);
+            statement.executeUpdate();
+        }
+    }
+
     private User mapUser(ResultSet rs) throws SQLException {
         Timestamp createdAt = rs.getTimestamp("created_at");
         return new User(

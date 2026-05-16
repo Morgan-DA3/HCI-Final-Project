@@ -28,3 +28,14 @@ mvn javafx:run -Dsmartlibrary.db.user=root -Dsmartlibrary.db.password=your_passw
 ```
 
 If MySQL is unavailable, the app runs with built-in presentation data.
+
+## Persistence Map
+- Members, librarians, admins: `users`
+- Roles: `roles`
+- Books: `books`
+- Categories: `categories`
+- Borrow/return operations: `borrowings`
+- Reservations: `reservations`
+- Late penalties: `fines`
+- Alerts and email-simulation messages: `notifications`
+- Audit trail: `activity_logs`

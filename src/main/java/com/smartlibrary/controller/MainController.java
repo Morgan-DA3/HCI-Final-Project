@@ -337,7 +337,7 @@ public class MainController {
             dialog.showAndWait();
             showBooks();
             UiUtil.toast(root, "Book catalog updated.", "toast-success");
-        } catch (IllegalArgumentException ex) {
+        } catch (RuntimeException ex) {
             UiUtil.showError("Book validation", ex.getMessage());
         }
     }
@@ -480,7 +480,7 @@ public class MainController {
         try {
             dialog.showAndWait();
             showUsers();
-        } catch (IllegalArgumentException ex) {
+        } catch (RuntimeException ex) {
             UiUtil.showError("User validation", ex.getMessage());
         }
     }
@@ -513,7 +513,7 @@ public class MainController {
         try {
             dialog.showAndWait();
             showMembers();
-        } catch (IllegalArgumentException ex) {
+        } catch (RuntimeException ex) {
             UiUtil.showError("Member validation", ex.getMessage());
         }
     }
