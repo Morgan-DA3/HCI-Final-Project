@@ -29,6 +29,14 @@ mvn javafx:run -Dsmartlibrary.db.user=root -Dsmartlibrary.db.password=your_passw
 
 If MySQL is unavailable, the app runs with built-in presentation data.
 
+You can also set MySQL credentials in [database.properties](src/main/resources/database.properties):
+
+```properties
+db.url=jdbc:mysql://localhost:3306/smart_library?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+db.user=root
+db.password=your_password
+```
+
 ## Persistence Map
 - Members, librarians, admins: `users`
 - Roles: `roles`

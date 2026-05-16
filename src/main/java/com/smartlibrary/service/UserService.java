@@ -13,12 +13,14 @@ import java.util.List;
 import java.util.Optional;
 
 public class UserService {
+    private final DatabaseManager databaseManager;
     private final UserDao userDao;
     private final List<User> users = new ArrayList<>();
     private int nextId = 10;
     private boolean databaseMode;
 
     public UserService(DatabaseManager databaseManager) {
+        this.databaseManager = databaseManager;
         this.userDao = new UserDao(databaseManager);
         seedUsers();
         try {
@@ -28,7 +30,7 @@ public class UserService {
                 users.addAll(databaseUsers);
                 databaseMode = true;
             }
-        } catch (SQLException ignored) {
+        } catch (SQLException ex) {
             // Demo mode remains available when MySQL has not been configured yet.
             databaseMode = false;
         }
@@ -65,7 +67,7 @@ public class UserService {
                 throw new IllegalStateException("Database insert failed. Check MySQL connection and the users table constraints.", ex);
             }
         } else {
-            user = new User(nextId++, name, email, passwordHash, role, true, LocalDateTime.now());
+            throw new IllegalStateException(databaseUnavailableMessage());
         }
         users.add(user);
         return user;
@@ -73,6 +75,14 @@ public class UserService {
 
     public boolean isDatabaseMode() {
         return databaseMode;
+    }
+
+    public String databaseUnavailableMessage() {
+        String error = databaseManager.getLastError().orElse("No successful MySQL connection was detected.");
+        return "MySQL is not connected, so this action cannot be saved in the database. "
+                + "Configured URL: " + databaseManager.getUrl()
+                + ", user: " + databaseManager.getUsername()
+                + ". Last error: " + error;
     }
 
     public void toggleActive(User user) {
