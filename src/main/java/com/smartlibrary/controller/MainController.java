@@ -17,8 +17,6 @@ import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.PieChart;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
@@ -107,6 +105,7 @@ public class MainController {
         Button button = new Button(text);
         button.getStyleClass().add("sidebar-button");
         button.setMaxWidth(Double.MAX_VALUE);
+        button.setTooltip(new Tooltip("Open " + text + " screen"));
         button.setOnAction(event -> action.run());
         return button;
     }
@@ -221,6 +220,7 @@ public class MainController {
     private Button actionButton(String label, Runnable action) {
         Button button = new Button(label);
         button.getStyleClass().add("secondary-button");
+        button.setTooltip(new Tooltip(label));
         button.setOnAction(event -> action.run());
         return button;
     }
@@ -229,9 +229,12 @@ public class MainController {
         VBox page = page("Book Catalog", "Advanced search, filtering, QR preview, covers, CSV export, and availability management.");
         TextField search = new TextField();
         search.setPromptText("Search by title, author, or ISBN");
+        search.setTooltip(new Tooltip("Type a title, author name, or ISBN to filter the catalog."));
         ComboBox<String> category = new ComboBox<>(FXCollections.observableArrayList(libraryService.categories()));
+        category.setTooltip(new Tooltip("Filter books by category."));
         category.getSelectionModel().select("All");
         ComboBox<String> status = new ComboBox<>(FXCollections.observableArrayList("All", "Available", "Unavailable"));
+        status.setTooltip(new Tooltip("Filter books by availability status."));
         status.getSelectionModel().select("All");
         Button add = actionButton("Add book", () -> bookDialog(null));
         Button export = actionButton("Export CSV", this::exportCsv);
@@ -247,6 +250,41 @@ public class MainController {
 
         table.setRowFactory(tv -> {
             TableRow<Book> row = new TableRow<>();
+            ContextMenu menu = new ContextMenu();
+            MenuItem edit = new MenuItem("Edit book");
+            edit.setOnAction(event -> {
+                if (!row.isEmpty()) bookDialog(row.getItem());
+            });
+            MenuItem delete = new MenuItem("Delete book");
+            delete.setOnAction(event -> {
+                if (!row.isEmpty() && UiUtil.confirm("Delete book", "Delete selected book from the catalog?")) {
+                    try {
+                        libraryService.deleteBook(row.getItem(), currentUser.getFullName());
+                        UiUtil.toast(root, "Book deleted.", "toast-success");
+                        showBooks();
+                    } catch (RuntimeException ex) {
+                        UiUtil.showError("Delete error", ex.getMessage());
+                    }
+                }
+            });
+            MenuItem reserve = new MenuItem("Reserve for me");
+            reserve.setOnAction(event -> {
+                if (!row.isEmpty()) {
+                    try {
+                        libraryService.reserveBook(row.getItem(), currentUser, currentUser.getFullName());
+                        UiUtil.toast(root, "Reservation added.", "toast-success");
+                    } catch (RuntimeException ex) {
+                        UiUtil.showError("Reservation error", ex.getMessage());
+                    }
+                }
+            });
+            if (sessionManager.canManageBooks()) {
+                menu.getItems().addAll(edit, delete);
+            }
+            if (currentUser.getRole() == Role.MEMBER) {
+                menu.getItems().add(reserve);
+            }
+            row.contextMenuProperty().bind(javafx.beans.binding.Bindings.when(row.emptyProperty()).then((ContextMenu) null).otherwise(menu));
             row.setOnMouseClicked(event -> {
                 if (event.getClickCount() == 2 && !row.isEmpty() && sessionManager.canManageBooks()) {
                     bookDialog(row.getItem());
@@ -271,6 +309,7 @@ public class MainController {
         table.getColumns().add(column("Available", "availableCopies"));
         table.getColumns().add(column("Shelf", "shelfLocation"));
         table.getColumns().add(column("Status", "status"));
+        table.setPlaceholder(new Label("No books match the current filters."));
         VBox.setVgrow(table, Priority.ALWAYS);
         return table;
     }
@@ -368,9 +407,11 @@ public class MainController {
     private void showBorrowing() {
         VBox page = page("Borrowing & Returns", "Issue books, handle returns, detect overdue items, generate fines, and manage reservation queues.");
         ComboBox<Book> books = new ComboBox<>(FXCollections.observableArrayList(libraryService.allBooks()));
+        books.setTooltip(new Tooltip("Select the book to issue or reserve."));
         books.setCellFactory(list -> bookCell());
         books.setButtonCell(bookCell());
         ComboBox<User> members = new ComboBox<>(FXCollections.observableArrayList(userService.members()));
+        members.setTooltip(new Tooltip("Select the student/member who receives the book."));
         members.setCellFactory(list -> userCell());
         members.setButtonCell(userCell());
         Button issue = actionButton("Issue book", () -> {
@@ -396,7 +437,6 @@ public class MainController {
         TableView<Borrowing> table = borrowingTable(libraryService.allBorrowings());
         Button returns = actionButton("Return selected", () -> {
             Borrowing borrowing = table.getSelectionModel().getSelectedItem();
-            if (borrowing == null) return;
             try {
                 libraryService.returnBook(borrowing, currentUser.getFullName());
                 UiUtil.toast(root, "Return completed.", "toast-success");
@@ -448,6 +488,7 @@ public class MainController {
         table.getColumns().add(column("Email", "email"));
         table.getColumns().add(column("Role", "role"));
         table.getColumns().add(column("Active", "active"));
+        table.setPlaceholder(new Label("No users found."));
         Button add = actionButton("Add user", this::userDialog);
         Button toggle = actionButton("Activate / suspend", () -> {
             User user = table.getSelectionModel().getSelectedItem();
@@ -457,8 +498,24 @@ public class MainController {
                 showUsers();
             }
         });
-        page.getChildren().addAll(new HBox(10, add, toggle), table);
+        TabPane tabs = new TabPane();
+        tabs.getTabs().addAll(
+                new Tab("All users", table),
+                new Tab("Members only", userTable(userService.members()))
+        );
+        tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        page.getChildren().addAll(new HBox(10, add, toggle), tabs);
         setContent(page);
+    }
+
+    private TableView<User> userTable(List<User> users) {
+        TableView<User> table = new TableView<>(FXCollections.observableArrayList(users));
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        table.getColumns().add(column("Name", "fullName"));
+        table.getColumns().add(column("Email", "email"));
+        table.getColumns().add(column("Role", "role"));
+        table.getColumns().add(column("Active", "active"));
+        return table;
     }
 
     private void userDialog() {
@@ -520,8 +577,14 @@ public class MainController {
 
     private void showMyLibrary() {
         VBox page = page("My Library", "Personal borrowing history, due dates, overdue status, and fine visibility.");
-        page.getChildren().addAll(new Label("Currently borrowed"), borrowingTable(libraryService.currentBorrowingsFor(currentUser)),
-                new Label("Borrow history"), borrowingTable(libraryService.historyFor(currentUser)), finesTable(libraryService.finesFor(currentUser)));
+        TabPane tabs = new TabPane();
+        tabs.getTabs().addAll(
+                new Tab("Current borrowings", borrowingTable(libraryService.currentBorrowingsFor(currentUser))),
+                new Tab("Borrow history", borrowingTable(libraryService.historyFor(currentUser))),
+                new Tab("Penalties", finesTable(libraryService.finesFor(currentUser)))
+        );
+        tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        page.getChildren().add(tabs);
         setContent(page);
     }
 
@@ -539,6 +602,7 @@ public class MainController {
         table.getColumns().add(column("Member", "memberName"));
         table.getColumns().add(column("Date", "reservationDate"));
         table.getColumns().add(column("Status", "status"));
+        table.setPlaceholder(new Label("No reservations available."));
         return table;
     }
 
@@ -549,6 +613,7 @@ public class MainController {
         table.getColumns().add(column("Reason", "reason"));
         table.getColumns().add(column("Status", "status"));
         table.getColumns().add(column("Date", "createdDate"));
+        table.setPlaceholder(new Label("No fines recorded."));
         return table;
     }
 
@@ -581,20 +646,32 @@ public class MainController {
                 UiUtil.showError("Report error", ex.getMessage());
             }
         });
-        page.getChildren().addAll(report, finesTable(libraryService.allFines()), reservationsTable(libraryService.allReservations()));
+        TabPane tabs = new TabPane();
+        tabs.getTabs().addAll(
+                new Tab("Fines", finesTable(libraryService.allFines())),
+                new Tab("Reservations", reservationsTable(libraryService.allReservations())),
+                new Tab("Activity", logTable())
+        );
+        tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        page.getChildren().addAll(report, tabs);
         setContent(page);
     }
 
     private void showLogs() {
         VBox page = page("System Logs", "Security and activity audit trail for administration and evaluation.");
+        page.getChildren().add(logTable());
+        setContent(page);
+    }
+
+    private TableView<ActivityLog> logTable() {
         TableView<ActivityLog> table = new TableView<>(FXCollections.observableArrayList(libraryService.logs()));
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         table.getColumns().add(column("Actor", "actor"));
         table.getColumns().add(column("Action", "action"));
         table.getColumns().add(column("Details", "details"));
         table.getColumns().add(column("Date", "createdAt"));
-        page.getChildren().add(table);
-        setContent(page);
+        table.setPlaceholder(new Label("No activity recorded."));
+        return table;
     }
 
     private void exportCsv() {

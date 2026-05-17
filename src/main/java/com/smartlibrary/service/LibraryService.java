@@ -138,6 +138,8 @@ public class LibraryService {
     }
 
     public Borrowing borrowBook(Book book, User member, String actor) {
+        if (book == null) throw new IllegalArgumentException("Please select a book before issuing a borrowing.");
+        if (member == null) throw new IllegalArgumentException("Please select a member before issuing a borrowing.");
         if (member.getRole() != Role.MEMBER) throw new IllegalArgumentException("Books can only be issued to library members.");
         long activeBorrowings = borrowings.stream().filter(b -> b.getMemberId() == member.getId() && b.getReturnDate() == null).count();
         if (activeBorrowings >= MAX_BORROWED_BOOKS) throw new IllegalArgumentException("Borrowing limit reached. Maximum allowed books: " + MAX_BORROWED_BOOKS);
@@ -163,6 +165,7 @@ public class LibraryService {
     }
 
     public void returnBook(Borrowing borrowing, String actor) {
+        if (borrowing == null) throw new IllegalArgumentException("Please select a borrowing record before returning a book.");
         if (borrowing.getReturnDate() != null) throw new IllegalArgumentException("This borrowing is already returned.");
         borrowing.setReturnDate(LocalDate.now());
         borrowing.setStatus("Returned");
@@ -214,6 +217,8 @@ public class LibraryService {
     }
 
     public Reservation reserveBook(Book book, User member, String actor) {
+        if (book == null) throw new IllegalArgumentException("Please select a book before creating a reservation.");
+        if (member == null) throw new IllegalArgumentException("Please select a member before creating a reservation.");
         boolean exists = reservations.stream().anyMatch(item -> item.getBookId() == book.getId() && item.getMemberId() == member.getId() && item.getStatus().equals("Waiting"));
         if (exists) throw new IllegalArgumentException("A reservation already exists for this member and book.");
         Reservation reservation = new Reservation(nextReservationId++, book.getId(), member.getId(), book.getTitle(), member.getFullName(), LocalDate.now(), "Waiting");

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <rect width="1200" height="760" fill="#f5f7fb"/>
+  <rect width="245" height="760" fill="#102a43"/>
+  <text x="285" y="70" fill="#12263a" font-family="Segoe UI, Arial" font-size="32" font-weight="800">Borrowing &amp; Returns</text>
+  <rect x="285" y="120" width="260" height="46" rx="8" fill="#ffffff" stroke="#d9e2ec"/>
+  <text x="305" y="150" fill="#667085" font-family="Segoe UI, Arial" font-size="15">Select book</text>
+  <rect x="565" y="120" width="240" height="46" rx="8" fill="#ffffff" stroke="#d9e2ec"/>
+  <text x="585" y="150" fill="#667085" font-family="Segoe UI, Arial" font-size="15">Select member</text>
+  <rect x="825" y="120" width="115" height="46" rx="8" fill="#0e7490"/>
+  <text x="850" y="150" fill="#ffffff" font-family="Segoe UI, Arial" font-size="15" font-weight="700">Issue</text>
+  <rect x="955" y="120" width="145" height="46" rx="8" fill="#e6f4f1"/>
+  <text x="985" y="150" fill="#0f766e" font-family="Segoe UI, Arial" font-size="15" font-weight="700">Reserve</text>
+  <rect x="285" y="215" width="815" height="405" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="285" y="215" width="815" height="48" rx="10" fill="#eaf5f5"/>
+  <text x="310" y="245" fill="#12263a" font-family="Segoe UI, Arial" font-size="15" font-weight="700">Book</text>
+  <text x="520" y="245" fill="#12263a" font-family="Segoe UI, Arial" font-size="15" font-weight="700">Member</text>
+  <text x="730" y="245" fill="#12263a" font-family="Segoe UI, Arial" font-size="15" font-weight="700">Due</text>
+  <text x="910" y="245" fill="#12263a" font-family="Segoe UI, Arial" font-size="15" font-weight="700">Status</text>
+</svg>
